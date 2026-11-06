@@ -1,0 +1,148 @@
+<!doctype html>
+<!-- Telegram Mini App menu of the bot's commands. Static and generic: the commands come in the
+     address (?m=, see webapp.py), a tap goes back to the bot as Telegram.WebApp.sendData. -->
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Меню</title>
+<script src="https://telegram.org/js/telegram-web-app.js"></script>
+<style>
+  :root {
+    --bg: var(--tg-theme-bg-color, #fff);
+    --fg: var(--tg-theme-text-color, #111);
+    --hint: var(--tg-theme-hint-color, #888);
+    --card: var(--tg-theme-secondary-bg-color, #f2f2f5);
+    --accent: var(--tg-theme-button-color, #2481cc);
+    --accent-fg: var(--tg-theme-button-text-color, #fff);
+    --section: var(--tg-theme-section-header-text-color, var(--hint));
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0; padding: 12px 16px 24px; background: var(--bg); color: var(--fg);
+    font: 16px/1.35 -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+    -webkit-user-select: none; user-select: none;
+  }
+  h2 {
+    margin: 18px 4px 8px; font-size: 13px; font-weight: 600; text-transform: uppercase;
+    letter-spacing: .04em; color: var(--section);
+  }
+  .grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(140px, 1fr)); gap: 8px; }
+  button.tile {
+    display: flex; flex-direction: column; align-items: flex-start; gap: 4px; min-height: 72px;
+    padding: 12px; border: 0; border-radius: 14px; background: var(--card); color: var(--fg);
+    font: inherit; text-align: left; cursor: pointer;
+  }
+  button.tile:active { opacity: .6; }
+  .desc { font-weight: 500; }
+  .cmd { font-size: 13px; color: var(--hint); }
+  #sheet { display: none; }
+  #sheet.open { display: block; }
+  #sheet h3 { margin: 8px 4px 12px; font-size: 18px; }
+  textarea {
+    width: 100%; min-height: 120px; padding: 12px; border: 0; border-radius: 14px;
+    background: var(--card); color: var(--fg); font: inherit; resize: vertical;
+    -webkit-user-select: text; user-select: text;
+  }
+  .row { display: flex; gap: 8px; margin-top: 12px; }
+  .row button {
+    flex: 1; padding: 12px; border: 0; border-radius: 12px; font: inherit; font-weight: 600;
+    cursor: pointer;
+  }
+  .send { background: var(--accent); color: var(--accent-fg); }
+  .back { background: var(--card); color: var(--fg); }
+  .empty { margin-top: 40px; text-align: center; color: var(--hint); }
+</style>
+</head>
+<body>
+<main id="menu"></main>
+<section id="sheet">
+  <h3 id="sheet-title"></h3>
+  <textarea id="text"></textarea>
+  <div class="row">
+    <button class="back" id="back" type="button">Назад</button>
+    <button class="send" id="send" type="button">Отправить</button>
+  </div>
+</section>
+<script>
+  const tg = window.Telegram && window.Telegram.WebApp;
+  if (tg) { tg.ready(); tg.expand(); }
+
+  function decode(value) {
+    const b64 = value.replace(/-/g, "+").replace(/_/g, "/");
+    const bytes = Uint8Array.from(atob(b64), (c) => c.charCodeAt(0));
+    return JSON.parse(new TextDecoder().decode(bytes));
+  }
+
+  function send(command, text) {
+    const data = JSON.stringify({ c: command, t: text || "" });
+    if (tg && tg.sendData) tg.sendData(data);  // closes the app; the bot gets the command
+    else alert("/" + command + (text ? " " + text : ""));
+  }
+
+  const menu = document.getElementById("menu");
+  const sheet = document.getElementById("sheet");
+  const field = document.getElementById("text");
+  let current = null;
+
+  function openSheet(command, description, prompt) {
+    current = command;
+    document.getElementById("sheet-title").textContent = description;
+    field.placeholder = prompt;
+    field.value = "";
+    menu.style.display = "none";
+    sheet.classList.add("open");
+    field.focus();
+    if (tg && tg.BackButton) tg.BackButton.show();
+  }
+
+  function closeSheet() {
+    sheet.classList.remove("open");
+    menu.style.display = "";
+    current = null;
+    if (tg && tg.BackButton) tg.BackButton.hide();
+  }
+
+  document.getElementById("back").onclick = closeSheet;
+  document.getElementById("send").onclick = () => send(current, field.value.trim());
+  if (tg && tg.BackButton) tg.BackButton.onClick(closeSheet);
+
+  let groups = [];
+  try {
+    const m = new URLSearchParams(location.search).get("m");
+    groups = m ? decode(m) : [];
+  } catch (e) {
+    groups = [];
+  }
+
+  if (!groups.length) {
+    menu.innerHTML = '<p class="empty">Нет команд. Нажмите /start в чате с ботом.</p>';
+  }
+  for (const group of groups) {
+    const title = document.createElement("h2");
+    title.textContent = group.t;
+    const grid = document.createElement("div");
+    grid.className = "grid";
+    for (const [command, description, prompt] of group.c) {
+      const tile = document.createElement("button");
+      tile.className = "tile";
+      tile.type = "button";
+      const d = document.createElement("span");
+      d.className = "desc";
+      d.textContent = description;
+      const c = document.createElement("span");
+      c.className = "cmd";
+      c.textContent = "/" + command;
+      tile.append(d, c);
+      tile.onclick = () => {
+        if (tg && tg.HapticFeedback) tg.HapticFeedback.selectionChanged();
+        if (prompt) openSheet(command, description, prompt);
+        else send(command, "");
+      };
+      grid.append(tile);
+    }
+    menu.append(title, grid);
+  }
+</script>
+</body>
+</html>
